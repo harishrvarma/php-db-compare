@@ -23,18 +23,15 @@ $config = [
 ];
 
 /* ==========================
- | DATABASE CLASS (MySQLi)
+ | DATABASE CLASS
  |========================== */
 
 class Database
 {
     private mysqli $conn;
-    private string $dbName;
 
     public function __construct(array $config)
     {
-        $this->dbName = $config['dbname'];
-
         $this->conn = new mysqli(
             $config['host'],
             $config['user'],
@@ -59,13 +56,14 @@ class Database
         return $tables;
     }
 
-    public function getColumns(string $table): array
+    // return column => datatype
+    public function getColumnTypes(string $table): array
     {
         $columns = [];
         $result = $this->conn->query("DESCRIBE `$table`");
 
         while ($row = $result->fetch_assoc()) {
-            $columns[] = $row['Field'];
+            $columns[$row['Field']] = $row['Type'];
         }
 
         return $columns;
@@ -102,11 +100,25 @@ class SchemaComparator
             $existsOld = in_array($table, $tablesOld, true);
             $existsNew = in_array($table, $tablesNew, true);
 
-            $oldCols = $existsOld ? $this->old->getColumns($table) : [];
-            $newCols = $existsNew ? $this->new->getColumns($table) : [];
+            $oldCols = $existsOld ? $this->old->getColumnTypes($table) : [];
+            $newCols = $existsNew ? $this->new->getColumnTypes($table) : [];
 
-            $extraOld = array_diff($oldCols, $newCols);
-            $extraNew = array_diff($newCols, $oldCols);
+            $oldNames = array_keys($oldCols);
+            $newNames = array_keys($newCols);
+
+            $extraOld = array_diff($oldNames, $newNames);
+            $extraNew = array_diff($newNames, $oldNames);
+
+            /* ========= datatype comparison ========= */
+
+            $datatypeChanged = [];
+            $commonCols = array_intersect($oldNames, $newNames);
+
+            foreach ($commonCols as $col) {
+                if ($oldCols[$col] !== $newCols[$col]) {
+                    $datatypeChanged[] = $col;
+                }
+            }
 
             $report[] = [
                 'table_name' => $table,
@@ -119,9 +131,12 @@ class SchemaComparator
                 'old_extra_count' => count($extraOld),
                 'new_extra_count' => count($extraNew),
 
-                // 🔥 NEW COLUMNS (names)
-                'old_extra_names' => implode('<br>', $extraOld),
-                'new_extra_names' => implode('<br>', $extraNew),
+                'old_extra_names' => implode(', ', $extraOld),
+                'new_extra_names' => implode(', ', $extraNew),
+
+                // NEW datatype fields
+                'datatype_changed' => empty($datatypeChanged) ? 'No' : 'Yes',
+                'datatype_changed_cols' => implode(', ', $datatypeChanged),
             ];
         }
 
@@ -150,17 +165,19 @@ try {
 
 echo "<h2>Database Schema Comparison Report</h2>";
 
-echo "<table border='1' cellpadding='8' cellspacing='0'>
+echo "<table border='1' cellpadding='6' cellspacing='0'>
 <tr style='background:#f2f2f2'>
-    <th>Table Name</th>
+    <th>Table</th>
     <th>OLD Exists</th>
     <th>NEW Exists</th>
-    <th>OLD Total Columns</th>
-    <th>NEW Total Columns</th>
-    <th>OLD Extra Count</th>
-    <th>NEW Extra Count</th>
+    <th>OLD Total</th>
+    <th>NEW Total</th>
+    <th>OLD Extra</th>
+    <th>NEW Extra</th>
     <th>OLD Extra Columns</th>
     <th>NEW Extra Columns</th>
+    <th>Datatype Changed?</th>
+    <th>Datatype Changed Columns</th>
 </tr>";
 
 foreach ($report as $row) {
@@ -174,6 +191,8 @@ foreach ($report as $row) {
         <td>{$row['new_extra_count']}</td>
         <td>{$row['old_extra_names']}</td>
         <td>{$row['new_extra_names']}</td>
+        <td>{$row['datatype_changed']}</td>
+        <td>{$row['datatype_changed_cols']}</td>
     </tr>";
 }
 
