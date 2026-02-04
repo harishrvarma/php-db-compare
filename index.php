@@ -50,7 +50,6 @@ class Database
     public function getTables(): array
     {
         $tables = [];
-
         $result = $this->conn->query("SHOW TABLES");
 
         while ($row = $result->fetch_array()) {
@@ -63,7 +62,6 @@ class Database
     public function getColumns(string $table): array
     {
         $columns = [];
-
         $result = $this->conn->query("DESCRIBE `$table`");
 
         while ($row = $result->fetch_assoc()) {
@@ -80,44 +78,50 @@ class Database
 
 class SchemaComparator
 {
-    private Database $db1;
-    private Database $db2;
+    private Database $old;
+    private Database $new;
 
-    public function __construct(Database $db1, Database $db2)
+    public function __construct(Database $old, Database $new)
     {
-        $this->db1 = $db1;
-        $this->db2 = $db2;
+        $this->old = $old;
+        $this->new = $new;
     }
 
     public function getTableReport(): array
     {
-        $tablesDb1 = $this->db1->getTables();
-        $tablesDb2 = $this->db2->getTables();
+        $tablesOld = $this->old->getTables();
+        $tablesNew = $this->new->getTables();
 
-        $allTables = array_unique(array_merge($tablesDb1, $tablesDb2));
+        $allTables = array_unique(array_merge($tablesOld, $tablesNew));
         sort($allTables);
 
         $report = [];
 
         foreach ($allTables as $table) {
 
-            $existsInDb1 = in_array($table, $tablesDb1, true);
-            $existsInDb2 = in_array($table, $tablesDb2, true);
+            $existsOld = in_array($table, $tablesOld, true);
+            $existsNew = in_array($table, $tablesNew, true);
 
-            $db1Columns = $existsInDb1 ? $this->db1->getColumns($table) : [];
-            $db2Columns = $existsInDb2 ? $this->db2->getColumns($table) : [];
+            $oldCols = $existsOld ? $this->old->getColumns($table) : [];
+            $newCols = $existsNew ? $this->new->getColumns($table) : [];
 
-            $extraInDb1 = array_diff($db1Columns, $db2Columns);
-            $extraInDb2 = array_diff($db2Columns, $db1Columns);
+            $extraOld = array_diff($oldCols, $newCols);
+            $extraNew = array_diff($newCols, $oldCols);
 
             $report[] = [
-                'table_name'        => $table,
-                'db1_exists'        => $existsInDb1 ? 'Yes' : 'No',
-                'db2_exists'        => $existsInDb2 ? 'Yes' : 'No',
-                'db1_total_columns' => count($db1Columns),
-                'db2_total_columns' => count($db2Columns),
-                'db1_extra_columns' => count($extraInDb1),
-                'db2_extra_columns' => count($extraInDb2),
+                'table_name' => $table,
+                'old_exists' => $existsOld ? 'Yes' : 'No',
+                'new_exists' => $existsNew ? 'Yes' : 'No',
+
+                'old_total_columns' => count($oldCols),
+                'new_total_columns' => count($newCols),
+
+                'old_extra_count' => count($extraOld),
+                'new_extra_count' => count($extraNew),
+
+                // 🔥 NEW COLUMNS (names)
+                'old_extra_names' => implode('<br>', $extraOld),
+                'new_extra_names' => implode('<br>', $extraNew),
             ];
         }
 
@@ -130,10 +134,10 @@ class SchemaComparator
  |========================== */
 
 try {
-    $db1 = new Database($config['old']);
-    $db2 = new Database($config['new']);
+    $oldDb = new Database($config['old']);
+    $newDb = new Database($config['new']);
 
-    $comparator = new SchemaComparator($db1, $db2);
+    $comparator = new SchemaComparator($oldDb, $newDb);
     $report = $comparator->getTableReport();
 
 } catch (Exception $e) {
@@ -153,6 +157,8 @@ echo "<table border='1' cellpadding='8' cellspacing='0'>
     <th>NEW Exists</th>
     <th>OLD Total Columns</th>
     <th>NEW Total Columns</th>
+    <th>OLD Extra Count</th>
+    <th>NEW Extra Count</th>
     <th>OLD Extra Columns</th>
     <th>NEW Extra Columns</th>
 </tr>";
@@ -160,12 +166,14 @@ echo "<table border='1' cellpadding='8' cellspacing='0'>
 foreach ($report as $row) {
     echo "<tr>
         <td>{$row['table_name']}</td>
-        <td>{$row['db1_exists']}</td>
-        <td>{$row['db2_exists']}</td>
-        <td>{$row['db1_total_columns']}</td>
-        <td>{$row['db2_total_columns']}</td>
-        <td>{$row['db1_extra_columns']}</td>
-        <td>{$row['db2_extra_columns']}</td>
+        <td>{$row['old_exists']}</td>
+        <td>{$row['new_exists']}</td>
+        <td>{$row['old_total_columns']}</td>
+        <td>{$row['new_total_columns']}</td>
+        <td>{$row['old_extra_count']}</td>
+        <td>{$row['new_extra_count']}</td>
+        <td>{$row['old_extra_names']}</td>
+        <td>{$row['new_extra_names']}</td>
     </tr>";
 }
 
