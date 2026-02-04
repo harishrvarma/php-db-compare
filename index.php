@@ -1,11 +1,7 @@
 <?php
 /**
- * Database Schema Comparison Script (MySQLi Version)
+ * Database Schema + Row Count Comparison Script (MySQLi)
  */
-
-/* ==========================
- | CONFIGURATION
- |========================== */
 
 $config = [
     'old' => [
@@ -22,9 +18,10 @@ $config = [
     ],
 ];
 
-/* ==========================
- | DATABASE CLASS
- |========================== */
+$dbOldName = $config['old']['dbname'];
+$dbNewName = $config['new']['dbname'];
+
+/* ================= DATABASE CLASS ================= */
 
 class Database
 {
@@ -67,11 +64,16 @@ class Database
 
         return $columns;
     }
+
+    public function getRowCount(string $table): int
+    {
+        $result = $this->conn->query("SELECT COUNT(*) as cnt FROM `$table`");
+        $row = $result->fetch_assoc();
+        return (int)$row['cnt'];
+    }
 }
 
-/* ==========================
- | SCHEMA COMPARATOR
- |========================== */
+/* ================= SCHEMA COMPARATOR ================= */
 
 class SchemaComparator
 {
@@ -108,7 +110,6 @@ class SchemaComparator
             $extraOld = array_diff($oldNames, $newNames);
             $extraNew = array_diff($newNames, $oldNames);
 
-            // datatype comparison
             $datatypeChanged = [];
             $commonCols = array_intersect($oldNames, $newNames);
 
@@ -117,6 +118,10 @@ class SchemaComparator
                     $datatypeChanged[] = $col;
                 }
             }
+
+            // Row counts
+            $oldRows = $existsOld ? $this->old->getRowCount($table) : 0;
+            $newRows = $existsNew ? $this->new->getRowCount($table) : 0;
 
             $report[] = [
                 'table_name' => $table,
@@ -134,6 +139,10 @@ class SchemaComparator
 
                 'datatype_changed' => empty($datatypeChanged) ? 'No' : 'Yes',
                 'datatype_changed_cols' => implode(', ', $datatypeChanged),
+
+                'old_rows' => $oldRows,
+                'new_rows' => $newRows,
+                'rows_matched' => ($oldRows === $newRows) ? 'Yes' : 'No',
             ];
         }
 
@@ -141,9 +150,7 @@ class SchemaComparator
     }
 }
 
-/* ==========================
- | RUN SCRIPT
- |========================== */
+/* ================= RUN SCRIPT ================= */
 
 try {
     $oldDb = new Database($config['old']);
@@ -156,9 +163,7 @@ try {
     die("Error: " . $e->getMessage());
 }
 
-/* ==========================
- | SUMMARY COUNTS
- |========================== */
+/* ================= SUMMARY ================= */
 
 $oldExistsCount = 0;
 $newExistsCount = 0;
@@ -173,25 +178,26 @@ foreach ($report as $r) {
     $newExtraTotal += $r['new_extra_count'];
 }
 
-/* ==========================
- | OUTPUT
- |========================== */
+/* ================= OUTPUT ================= */
 
-echo "<h2>Database Schema Comparison Report</h2>";
+echo "<h2>Database Schema + Row Comparison Report</h2>";
 
 echo "<table border='1' cellpadding='6' cellspacing='0'>
 <tr style='background:#f2f2f2'>
     <th>Table</th>
-    <th>OLD Exists ($oldExistsCount)</th>
-    <th>NEW Exists ($newExistsCount)</th>
-    <th>OLD Total</th>
-    <th>NEW Total</th>
-    <th>OLD Extra ($oldExtraTotal)</th>
-    <th>NEW Extra ($newExtraTotal)</th>
-    <th>OLD Extra Columns</th>
-    <th>NEW Extra Columns</th>
+    <th>$dbOldName Exists ($oldExistsCount)</th>
+    <th>$dbNewName Exists ($newExistsCount)</th>
+    <th>$dbOldName Total Columns</th>
+    <th>$dbNewName Total Columns</th>
+    <th>$dbOldName Extra Columns ($oldExtraTotal)</th>
+    <th>$dbNewName Extra Columns ($newExtraTotal)</th>
+    <th>$dbOldName Extra Column Names</th>
+    <th>$dbNewName Extra Column Names</th>
     <th>Datatype Changed?</th>
     <th>Datatype Changed Columns</th>
+    <th>$dbOldName Rows</th>
+    <th>$dbNewName Rows</th>
+    <th>Row Count Matched</th>
 </tr>";
 
 foreach ($report as $row) {
@@ -207,6 +213,9 @@ foreach ($report as $row) {
         <td>{$row['new_extra_names']}</td>
         <td>{$row['datatype_changed']}</td>
         <td>{$row['datatype_changed_cols']}</td>
+        <td>{$row['old_rows']}</td>
+        <td>{$row['new_rows']}</td>
+        <td>{$row['rows_matched']}</td>
     </tr>";
 }
 
