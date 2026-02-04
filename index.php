@@ -56,7 +56,6 @@ class Database
         return $tables;
     }
 
-    // return column => datatype
     public function getColumnTypes(string $table): array
     {
         $columns = [];
@@ -109,8 +108,7 @@ class SchemaComparator
             $extraOld = array_diff($oldNames, $newNames);
             $extraNew = array_diff($newNames, $oldNames);
 
-            /* ========= datatype comparison ========= */
-
+            // datatype comparison
             $datatypeChanged = [];
             $commonCols = array_intersect($oldNames, $newNames);
 
@@ -134,7 +132,6 @@ class SchemaComparator
                 'old_extra_names' => implode(', ', $extraOld),
                 'new_extra_names' => implode(', ', $extraNew),
 
-                // NEW datatype fields
                 'datatype_changed' => empty($datatypeChanged) ? 'No' : 'Yes',
                 'datatype_changed_cols' => implode(', ', $datatypeChanged),
             ];
@@ -160,6 +157,23 @@ try {
 }
 
 /* ==========================
+ | SUMMARY COUNTS
+ |========================== */
+
+$oldExistsCount = 0;
+$newExistsCount = 0;
+$oldExtraTotal = 0;
+$newExtraTotal = 0;
+
+foreach ($report as $r) {
+    if ($r['old_exists'] === 'Yes') $oldExistsCount++;
+    if ($r['new_exists'] === 'Yes') $newExistsCount++;
+
+    $oldExtraTotal += $r['old_extra_count'];
+    $newExtraTotal += $r['new_extra_count'];
+}
+
+/* ==========================
  | OUTPUT
  |========================== */
 
@@ -168,12 +182,12 @@ echo "<h2>Database Schema Comparison Report</h2>";
 echo "<table border='1' cellpadding='6' cellspacing='0'>
 <tr style='background:#f2f2f2'>
     <th>Table</th>
-    <th>OLD Exists</th>
-    <th>NEW Exists</th>
+    <th>OLD Exists ($oldExistsCount)</th>
+    <th>NEW Exists ($newExistsCount)</th>
     <th>OLD Total</th>
     <th>NEW Total</th>
-    <th>OLD Extra</th>
-    <th>NEW Extra</th>
+    <th>OLD Extra ($oldExtraTotal)</th>
+    <th>NEW Extra ($newExtraTotal)</th>
     <th>OLD Extra Columns</th>
     <th>NEW Extra Columns</th>
     <th>Datatype Changed?</th>
